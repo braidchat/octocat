@@ -84,7 +84,7 @@ fn main() {
     // Start server
     println!("Bot {:?} starting", braid_conf.get("name").unwrap().as_str().unwrap());
     Iron::new(move |request : &mut Request| {
-        let req_path = request.url.path.join("/");
+        let req_path = request.url.path().join("/");
         match request.method {
             method::Put => {
                 if req_path == "message" {
