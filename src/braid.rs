@@ -24,3 +24,8 @@ pub fn send_braid_request(braid_conf: &conf::TomlConf, message: message::Message
         .headers(headers)
         .send()
 }
+
+pub fn thread_url(braid_conf: &conf::TomlConf, msg: &message::Message) -> String {
+    let site_url = braid_conf.get("site_url").unwrap().as_str().unwrap();
+    format!("{}/{}/thread/{}", site_url, msg.group_id, msg.thread_id)
+}

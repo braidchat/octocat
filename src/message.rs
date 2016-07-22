@@ -120,3 +120,15 @@ pub fn response_to(msg: Message, content: String) -> Message {
         content: content,
     }
 }
+
+pub fn new_thread_msg(group: Uuid, tag: Uuid, content: String) -> Message {
+    Message {
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(), // gets filled in by server
+        group_id: group,
+        thread_id: Uuid::new_v4(),
+        mentioned_user_ids: vec![],
+        mentioned_tag_ids: vec![tag],
+        content: content,
+    }
+}

@@ -33,6 +33,7 @@ use regex::Regex;
 use openssl::crypto::hmac;
 use openssl::crypto::hash::Type;
 use rustc_serialize::hex::FromHex;
+use uuid::Uuid;
 
 mod conf;
 mod routing;
@@ -69,8 +70,6 @@ fn main() {
     let bind_port = conf::get_conf_val(&conf, "general", "port")
         .expect("Missing key port in section general");
     let bind_addr = format!("localhost:{}", bind_port);
-    //let giphy_api_key = conf::get_conf_val(&conf, "giphy", "api_key")
-        //.expect("Missing giphy api key");
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
     let keys = ["name", "api_url", "app_id", "token"];
@@ -81,6 +80,9 @@ fn main() {
         }
     }
     let braid_token = conf::get_conf_val(&conf, "braid", "token").unwrap();
+    let github_conf = conf::get_conf_group(&conf, "github").expect("Couldn't load github conf");
+    let braid_response_tag = conf::get_conf_val(&conf, "braid", "tag_id").expect("Couldn't load braid response tag id");
+    let braid_response_tag_id = Uuid::parse_str(braid_response_tag.as_str()).expect("Couldn't parse tag uuid");
     // Start server
     println!("Bot {:?} starting", braid_conf.get("name").unwrap().as_str().unwrap());
     Iron::new(move |request : &mut Request| {
@@ -100,10 +102,28 @@ fn main() {
                         return Err(IronError::new(routing::BadMac, status::Forbidden));
                     }
                     println!("Mac OK");
-                    // Decode message then handle gif search & reply on new thread
                     match message::decode_transit_msgpack(buf) {
                         Some(msg) => {
                             let braid_conf = braid_conf.clone();
+                            let github_conf = github_conf.clone();
+                            thread::spawn(move || {
+                                let content = format!("Created by octocat bot from [braid chat]({})",
+                                                      braid::thread_url(&braid_conf, &msg));
+                                let group_id = msg.group_id;
+                                let gh_resp = github::create_issue(
+                                    &github_conf,
+                                    strip_leading_name(&msg.content[..]),
+                                    content);
+                                if let Some(url) = gh_resp {
+                                    let braid_content = format!("New issue opened: {}", url);
+                                    let response_msg = message::new_thread_msg(group_id,
+                                                                               braid_response_tag_id,
+                                                                               braid_content);
+                                    braid::send_braid_request(&braid_conf, response_msg);
+                                } else {
+                                    println!("Couldn't create issue");
+                                }
+                            });
                         },
                         None => println!("Couldn't parse message")
                     }
