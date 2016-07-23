@@ -1,8 +1,6 @@
 use conf::TomlConf;
 use std::io::Read;
 use std::collections::BTreeMap;
-use hyper::Url;
-use hyper::method::Method;
 use hyper::client::{Client,Response};
 use hyper::header::{Headers,ContentType,Authorization,Bearer,UserAgent};
 use hyper::error::Result as HttpResult;
@@ -45,7 +43,7 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String) -> O
     let data = JsonValue::Object(map);
 
     match send_github_request(token, path.as_str(), data) {
-        Err(e) => { println!("Error fetching from github"); None }
+        Err(e) => { println!("Error fetching from github: {:?}", e); None }
         Ok(mut resp) => {
             let mut buf = String::new();
             match resp.read_to_string(&mut buf) {
