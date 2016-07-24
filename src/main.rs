@@ -32,6 +32,7 @@ mod message;
 mod github;
 mod braid;
 mod handler;
+mod commands;
 
 
 fn main() {
