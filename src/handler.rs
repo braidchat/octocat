@@ -93,3 +93,7 @@ pub fn handle_braid_message(request: &mut Request, conf: conf::TomlConf) -> Resu
     }
     Ok(Response::with((status::Ok, "ok")))
 }
+
+pub fn handle_github_webhook(request: &mut Request, conf: conf::TomlConf) -> Result<Response,IronError> {
+    Ok(Response::with((status::Ok, "ok")))
+}

@@ -67,6 +67,13 @@ fn main() {
                     Err(IronError::new(routing::NoRoute, status::NotFound))
                 }
             }
+            method::Post => {
+                if req_path == "issue" {
+                    handler::handle_github_webhook(request, conf.clone())
+                } else {
+                    Err(IronError::new(routing::NoRoute, status::NotFound))
+                }
+            }
             _ => Err(IronError::new(routing::NoRoute, status::NotFound))
         }
     }).http(&bind_addr[..]).unwrap();
