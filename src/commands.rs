@@ -107,32 +107,52 @@ fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
     }
 }
 
+// TODO: allow bare repo if unambiguous, otherwise org/repo
+fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf> {
+    conf.get("repos")
+        .and_then(|r| r.as_slice())
+        .and_then(|rs| {
+            let mut it = rs.iter();
+            it.find(|r| {
+                r.as_table()
+                    .and_then(|r| r.get("repo"))
+                    .and_then(|n| n.as_str())
+                    .map(|r_name| r_name == name)
+                    .unwrap_or(false)
+            }).and_then(|found| found.as_table())
+        })
+}
+
 fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
-    let braid_response_tag = conf::get_conf_val(&conf, "braid", "tag_id")
-        .expect("Couldn't load braid response tag id");
-    let braid_response_tag_id = Uuid::parse_str(braid_response_tag.as_str())
-        .expect("Couldn't parse tag uuid");
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
-    let github_conf = conf::get_conf_group(&conf, "github")
-        .expect("Couldn't load github conf");
 
-    // TODO: get repo from message
-
-    let content = format!("Created by octocat bot from [braid chat]({})",
-    braid::thread_url(&braid_conf, &msg));
-    let group_id = msg.group_id;
-    let gh_resp = github::create_issue(
-        &github_conf,
-        strip_leading_name(&msg.content[..]),
-        content);
-    if let Some(url) = gh_resp {
-        let braid_content = format!("New issue opened: {}", url);
-        let response_msg = message::new_thread_msg(group_id,
-                                                   braid_response_tag_id,
-                                                   braid_content);
-        send_to_braid(response_msg, &braid_conf);
+    let body = strip_leading_name(&msg.content[..]);
+    let repo_conf = body.split_whitespace().nth(1)
+        .and_then(|s| find_repo_conf(s.to_owned(), &conf));
+    if let Some(repo_conf) = repo_conf {
+        let content = format!("Created by octocat bot from [braid chat]({})",
+        braid::thread_url(&braid_conf, &msg));
+        let group_id = msg.group_id;
+        let gh_resp = github::create_issue(repo_conf, body, content);
+        if let Some(url) = gh_resp {
+            let braid_content = format!("New issue opened: {}", url);
+            let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
+                .expect("Couldn't load braid response tag id");
+            let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
+                .expect("Couldn't parse tag uuid");
+            let response_msg = message::new_thread_msg(group_id,
+                                                       braid_response_tag_id,
+                                                       braid_content);
+            send_to_braid(response_msg, &braid_conf);
+        } else {
+            println!("Couldn't create issue");
+            let err_resp = "Couldn't create issue, sorry".to_owned();
+            send_to_braid(message::response_to(msg, err_resp), &braid_conf);
+        }
     } else {
-        println!("Couldn't create issue");
+        println!("Couldn't parse repo name");
+        let err_resp = "Don't know which repo you mean, sorry".to_owned();
+        send_to_braid(message::response_to(msg, err_resp), &braid_conf);
     }
 }
