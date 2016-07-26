@@ -8,3 +8,30 @@ To set up:
 
   - Generate an access token with `repo` scope at [https://github.com/settings/tokens](https://github.com/settings/tokens)
   - Add a webhook on Github from the relevant repository (from repo Settings)
+
+
+Example conf.toml:
+
+```
+[general]
+port = "7777"
+
+[braid]
+name = "octocat"
+api_url = "https://api.braid.chat/bots/message"
+site_url = "https://braid.chat"
+app_id = "app id from braid"
+token = "app token from braid"
+
+[[repos]]
+token = "token created from github"
+org = "jamesnvc"
+repo = "dotfiles"
+tag_id = "some braid tag id"
+
+[[repos]]
+token = "token created from github"
+org = "jamesnvc"
+repo = "emacs.d"
+tag_id = "some braid tag id"
+```
