@@ -128,13 +128,15 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
         .expect("Missing braid config information");
 
     let body = strip_leading_name(&msg.content[..]);
-    let repo_conf = body.split_whitespace().nth(1)
+    let mut words = body.split_whitespace();
+    let repo_conf = words.nth(1)
         .and_then(|s| find_repo_conf(s.to_owned(), &conf));
+    let issue_title = words.collect::<Vec<_>>().join(" ");
     if let Some(repo_conf) = repo_conf {
         let content = format!("Created by octocat bot from [braid chat]({})",
         braid::thread_url(&braid_conf, &msg));
         let group_id = msg.group_id;
-        let gh_resp = github::create_issue(repo_conf, body, content);
+        let gh_resp = github::create_issue(repo_conf, issue_title, content);
         if let Some(url) = gh_resp {
             let braid_content = format!("New issue opened: {}", url);
             let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
