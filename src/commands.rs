@@ -107,20 +107,42 @@ fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
     }
 }
 
-// TODO: allow bare repo if unambiguous, otherwise org/repo
 fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf> {
-    conf.get("repos")
-        .and_then(|r| r.as_slice())
-        .and_then(|rs| {
-            let mut it = rs.iter();
-            it.find(|r| {
-                r.as_table()
-                    .and_then(|r| r.get("repo"))
-                    .and_then(|n| n.as_str())
-                    .map(|r_name| r_name == name)
-                    .unwrap_or(false)
-            }).and_then(|found| found.as_table())
-        })
+    if name.contains("/") {
+        let mut split = name.splitn(2, "/");
+        let org = split.next().unwrap();
+        let repo = split.next().unwrap();
+        conf.get("repos")
+            .and_then(|r| r.as_slice())
+            .and_then(|rs| {
+                let mut it = rs.iter();
+                it.find(|r| {
+                    let t = r.as_table();
+                    let o = t.and_then(|r| r.get("org"))
+                        .and_then(|n| n.as_str())
+                        .map(|r_org| r_org == org)
+                        .unwrap_or(false);
+                    let r = t.and_then(|r| r.get("repo"))
+                        .and_then(|n| n.as_str())
+                        .map(|r_repo| r_repo == repo).
+                        unwrap_or(false);
+                    o && r
+                }).and_then(|found| found.as_table())
+            })
+    } else {
+        conf.get("repos")
+            .and_then(|r| r.as_slice())
+            .and_then(|rs| {
+                let mut it = rs.iter();
+                it.find(|r| {
+                    r.as_table()
+                        .and_then(|r| r.get("repo"))
+                        .and_then(|n| n.as_str())
+                        .map(|r_name| r_name == name)
+                        .unwrap_or(false)
+                }).and_then(|found| found.as_table())
+            })
+    }
 }
 
 fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
