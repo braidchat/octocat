@@ -15,8 +15,8 @@ fn strip_leading_name(msg: &str) -> String {
     RE.replace(msg, "")
 }
 
-fn send_to_braid(msg: message::Message, braid_conf: conf::TomlConf) {
-    match braid::send_braid_request(&braid_conf, msg) {
+fn send_to_braid(msg: message::Message, braid_conf: &conf::TomlConf) {
+    match braid::send_braid_request(braid_conf, msg) {
         Ok(r) => {
             println!("Sent message to braid");
             if r.status == StatusCode::Created {
@@ -46,21 +46,65 @@ pub fn parse_command(msg: message::Message, conf: conf::TomlConf) {
 fn send_help_response(msg: message::Message, conf: conf::TomlConf) {
     let bot_name = conf::get_conf_val(&conf, "braid", "name")
         .expect("Bot needs a name");
-    let mut help = String::new();
-    help.push_str("I know the following commands:\n");
-    help.push_str(format!("'/{} help' will make me respond with this message\n", bot_name).as_str());
-    help.push_str(format!("'/{} list' will get you the connected github repos\n", bot_name).as_str());
-    help.push_str(format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name).as_str());
-    let msg = message::response_to(msg, help);
 
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
-    send_to_braid(msg, braid_conf);
+
+    // XXX: Temporarily sending as multiple messages to avoid transit-clj bug
+    // https://github.com/cognitect/transit-clj/issues/33
+    //let mut help = String::new();
+    //help.push_str("I know the following commands:");
+    //help.push_str(format!("'/{} help' will make me respond with this message\n", bot_name).as_str());
+    //help.push_str(format!("'/{} list' will get you the connected github repos\n", bot_name).as_str());
+    //help.push_str(format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name).as_str());
+
+    let help_lines = vec![
+        "I know the following commands".to_owned(),
+        format!("'/{} help' will make me respond with this message\n", bot_name),
+        format!("'/{} list' will get you the connected github repos\n", bot_name),
+        format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name),
+    ];
+    for help_line in help_lines {
+        send_to_braid(message::response_to(msg.clone(), help_line), &braid_conf);
+    }
+
+}
+
+fn get_repos(conf: &conf::TomlConf) -> Result<Vec<String>, String> {
+    let mut repo_list = vec![];
+    let repos = try!(conf.get("repos")
+                     .and_then(|r| r.as_slice())
+                     .ok_or("Repos should be a list of tables"));
+    for repo in repos {
+        let repo = try!(repo.as_table().ok_or("repo isn't a table?"));
+        let org = try!(repo.get("org")
+                       .and_then(|o| o.as_str())
+                       .ok_or("Repo is missing org"));
+        let repo = try!(repo.get("repo")
+                        .and_then(|r| r.as_str())
+                        .ok_or("Repo is missing repo"));
+        repo_list.push(format!("{}/{}", org, repo));
+    }
+    Ok(repo_list)
 }
 
 fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
-    let mut reply = String::new();
-    let msg = message::response_to(msg, reply);
+    let braid_conf = conf::get_conf_group(&conf, "braid")
+        .expect("Missing braid config information");
+    let mut reply = String::from("I know about the following repos\n");
+    match get_repos(&conf) {
+        Ok(repos) => {
+            for r in repos {
+                reply.push_str(r.as_str());
+                reply.push_str("\n");
+            }
+            let msg = message::response_to(msg, reply);
+            send_to_braid(msg, &braid_conf);
+        }
+        Err(e) => {
+            println!("Error loading repos: {}", e);
+        }
+    }
 }
 
 fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
@@ -87,7 +131,7 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
         let response_msg = message::new_thread_msg(group_id,
                                                    braid_response_tag_id,
                                                    braid_content);
-        send_to_braid(response_msg, braid_conf);
+        send_to_braid(response_msg, &braid_conf);
     } else {
         println!("Couldn't create issue");
     }
