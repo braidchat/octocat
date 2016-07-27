@@ -26,7 +26,14 @@ fn send_github_request(token: &str, endpoint: &str, data: JsonValue) -> HttpResu
         .send()
 }
 
-pub fn create_issue(github_conf: &TomlConf, title: String, content: String) -> Option<String> {
+pub struct GithubIssue {
+    pub url: String,
+    pub number: i64,
+}
+
+pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
+    -> Option<GithubIssue>
+{
     let token = github_conf.get("token").and_then(|token| token.as_str()).expect("Missing GitHub token");
 
     let owner = github_conf.get("org").and_then(|org| org.as_str()).expect("Missing GitHub org");
@@ -52,13 +59,21 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String) -> O
                     match serde_json::from_str(&buf[..]) {
                         Ok(new_issue) => {
                             let new_issue: BTreeMap<String, JsonValue> = new_issue;
-                            new_issue.get("html_url")
+                            let url = new_issue.get("html_url")
                                 .and_then(|url| {
+                                    // TODO: why can't I use as_str here?
                                     match url {
                                         &JsonValue::String(ref s) => Some(s.to_owned()),
                                         _ => None
                                     }
-                                })
+                                } );
+                            let number: Option<i64> = new_issue.get("number")
+                                .and_then(|n| { n.as_i64() });
+                            if let (Some(u), Some(n)) = (url, number) {
+                                Some(GithubIssue { url: u, number: n })
+                            } else {
+                                None
+                            }
                         }
                         Err(e) => { println!("Failed to parse json: {:?}", e); None }
                     }

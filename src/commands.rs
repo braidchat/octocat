@@ -7,6 +7,7 @@ use conf;
 use message;
 use braid;
 use github;
+use tracking;
 
 fn strip_leading_name(msg: &str) -> String {
     lazy_static! {
@@ -159,8 +160,8 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
         braid::thread_url(&braid_conf, &msg));
         let group_id = msg.group_id;
         let gh_resp = github::create_issue(repo_conf, issue_title, content);
-        if let Some(url) = gh_resp {
-            let braid_content = format!("New issue opened: {}", url);
+        if let Some(gh_issue) = gh_resp {
+            let braid_content = format!("New issue opened: {}", gh_issue.url);
             let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
                 .expect("Couldn't load braid response tag id");
             let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
@@ -168,6 +169,7 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
             let response_msg = message::new_thread_msg(group_id,
                                                        braid_response_tag_id,
                                                        braid_content);
+            tracking::add_watched_thread(response_msg.thread_id, gh_issue.number);
             send_to_braid(response_msg, &braid_conf);
         } else {
             println!("Couldn't create issue");

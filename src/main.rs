@@ -19,6 +19,8 @@ extern crate mime;
 extern crate serde_json;
 // configuration
 extern crate toml;
+// tracking braid thread <-> github issues
+extern crate rusqlite;
 
 use std::env;
 use std::process;
@@ -33,6 +35,7 @@ mod github;
 mod braid;
 mod handler;
 mod commands;
+mod tracking;
 
 
 fn main() {
@@ -56,6 +59,7 @@ fn main() {
             panic!("Missing braid configuration key '{}'", k);
         }
     }
+    tracking::setup_tables();
     // Start server
     println!("Bot {:?} starting", braid_conf.get("name").unwrap().as_str().unwrap());
     Iron::new(move |request : &mut Request| {
