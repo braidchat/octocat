@@ -6,7 +6,7 @@ use serde::{Serialize,Deserialize};
 use rmp::Marker;
 use rmp::encode::{ValueWriteError, write_map_len, write_str};
 use rmp_serde::{Serializer,Deserializer};
-use rmp_serde::encode::VariantWriter;
+use rmp_serde::encode::{VariantWriter, Error as EncodeError};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Message {
@@ -96,11 +96,10 @@ impl VariantWriter for StructMapWriter {
         }
 }
 
-// TODO: check for error instead of just unwrap
-pub fn encode_transit_msgpack(msg: Message) -> Vec<u8> {
+pub fn encode_transit_msgpack(msg: Message) -> Result<Vec<u8>, EncodeError> {
     let mut buf = vec![];
-    msg.serialize(&mut Serializer::with(&mut &mut buf, StructMapWriter)).ok().unwrap();
-    buf
+    try!(msg.serialize(&mut Serializer::with(&mut &mut buf, StructMapWriter)));
+    Ok(buf)
 }
 
 pub fn decode_transit_msgpack(msgpack_buf: Vec<u8>) -> Option<Message> {
