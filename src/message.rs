@@ -8,7 +8,7 @@ use rmp::encode::{ValueWriteError, write_map_len, write_str};
 use rmp_serde::{Serializer,Deserializer};
 use rmp_serde::encode::VariantWriter;
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Message {
     #[serde(rename="~:id", deserialize_with="deserialize_transit_uuid", serialize_with="serialize_transit_uuid")]
     pub id: Uuid,
