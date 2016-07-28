@@ -22,6 +22,7 @@ api_url = "https://api.braid.chat/bots/message"
 site_url = "https://braid.chat"
 app_id = "app id from braid"
 token = "app token from braid"
+group_id = "bot group id"
 
 [[repos]]
 token = "token created from github"

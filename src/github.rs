@@ -6,6 +6,7 @@ use hyper::header::{Headers,ContentType,Authorization,Bearer,UserAgent};
 use hyper::error::Result as HttpResult;
 use serde_json;
 use serde_json::value::{Value as JsonValue,Map};
+use uuid::Uuid;
 
 use conf;
 use tracking;
@@ -161,7 +162,11 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
                     None => { println!("Missing comment body"); return }
                 };
             let msg_body = format!("{} commented:\n{}", commenter, comment_body);
-            let msg = message::reply_to_thread(thread_id, msg_body);
+            // TODO: get group id from initial message instead of bot config
+            let braid_group = conf::get_conf_val(&conf, "braid", "group_id")
+                .and_then(|id| Uuid::parse_str(&id[..]).ok() )
+                .expect("Missing group id");
+            let msg = message::reply_to_thread(thread_id, braid_group, msg_body);
             let braid_conf = conf::get_conf_group(&conf, "braid")
                 .expect("Missing braid config information");
             braid::send_braid_request(msg, &braid_conf);
