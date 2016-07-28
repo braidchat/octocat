@@ -12,7 +12,8 @@ pub fn send_braid_request(braid_conf: &conf::TomlConf, message: message::Message
     let api_url = braid_conf.get("api_url").unwrap().as_str().unwrap();
     let bot_id = braid_conf.get("app_id").unwrap().as_str().unwrap().to_owned();
     let token = braid_conf.get("token").unwrap().as_str().unwrap().to_owned();
-    let body = message::encode_transit_msgpack(message);
+    let body = message::encode_transit_msgpack(message)
+        .expect("Couldn't encode body to send!");
     let client = Client::new();
     let mut headers = Headers::new();
     headers.set(ContentType(Mime(TopLevel::Application,
