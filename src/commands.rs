@@ -50,23 +50,13 @@ fn send_help_response(msg: message::Message, conf: conf::TomlConf) {
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
 
-    // XXX: Temporarily sending as multiple messages to avoid transit-clj bug
-    // https://github.com/cognitect/transit-clj/issues/33
-    //let mut help = String::new();
-    //help.push_str("I know the following commands:");
-    //help.push_str(format!("'/{} help' will make me respond with this message\n", bot_name).as_str());
-    //help.push_str(format!("'/{} list' will get you the connected github repos\n", bot_name).as_str());
-    //help.push_str(format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name).as_str());
+    let mut help = String::new();
+    help.push_str("I know the following commands:\n");
+    help.push_str(format!("'/{} help' will make me respond with this message\n", bot_name).as_str());
+    help.push_str(format!("'/{} list' will get you the connected github repos\n", bot_name).as_str());
+    help.push_str(format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name).as_str());
 
-    let help_lines = vec![
-        "I know the following commands".to_owned(),
-        format!("'/{} help' will make me respond with this message\n", bot_name),
-        format!("'/{} list' will get you the connected github repos\n", bot_name),
-        format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name),
-    ];
-    for help_line in help_lines {
-        send_to_braid(message::response_to(msg.clone(), help_line), &braid_conf);
-    }
+    send_to_braid(message::response_to(msg, help), &braid_conf);
 
 }
 
