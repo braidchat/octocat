@@ -20,3 +20,18 @@ pub fn add_watched_thread(thread_id: Uuid, issue_number: i64) {
                   &[&thread_id.simple().to_string(), &issue_number])
         .expect("Couldn't add watched thread");
 }
+
+pub fn thread_for_issue(issue_number: i64) -> Option<Uuid> {
+    let conn = Connection::open("threads_issues.sqlite")
+        .expect("Couldn't open database!");
+
+    match conn.query_row("SELECT thread_id FROM watched_threads
+                    WHERE issue_number = $0", &[&issue_number],
+                    |row| { row.get::<_, String>(0) }) {
+        Ok(thread_id) => Uuid::parse_str(&thread_id[..]).ok(),
+        Err(e) => {
+            println!("Error finding watched thread from issue: {:?}", e);
+            None
+        }
+    }
+}
