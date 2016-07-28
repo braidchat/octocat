@@ -7,6 +7,9 @@ use hyper::error::Result as HttpResult;
 use serde_json;
 use serde_json::value::{Value as JsonValue,Map};
 
+use tracking;
+use braid;
+use message;
 
 static GITHUB_API_URL: &'static str = "https://api.github.com";
 
@@ -108,6 +111,48 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
                     }
                 }
             }
+        }
+    }
+}
+
+pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
+    match serde_json::from_slice(&msg_body[..]) {
+        Err(e) => println!("Couldn't parse update json: {:?}", e),
+        Ok(update) => {
+            let update: BTreeMap<String, JsonValue> = update;
+            let repo = update.get("repository")
+                .and_then(|r| r.as_object())
+                .and_then(|r| r.get("full_name"))
+                .and_then(|n| n.as_string() );
+            let issue_number = update.get("issue")
+                .and_then(|i| i.as_object())
+                .and_then(|i| i.get("number"))
+                .and_then(|n| n.as_i64());
+            if repo.is_none() { println!("Couldn't get repo"); return }
+            if issue_number.is_none() { println!("Couldn't get issue #"); return }
+            let repo = repo.unwrap();
+            let issue_number = issue_number.unwrap();
+            println!("Update to issue {:?} in {:?}", issue_number, repo);
+            let repo_conf = match find_repo_conf(repo.to_owned(), &conf) {
+                Some(conf) => conf,
+                None => { println!("No conf for repo {}", repo); return }
+            };
+            let thread_id = match tracking::thread_for_issue(issue_number) {
+                Some(id) => id,
+                None => {
+                    println!("No thread for issue {} in {}", issue_number, repo);
+                    return
+                }
+            };
+            println!("conf {:?} thread id {:?}", repo_conf, thread_id);
+            let comment = match update.get("comment") {
+                Some(comment) => comment,
+                None => { println!("No comment in issue!"); return }
+            };
+            let commenter = comment.find_path(&["user", "login"])
+                .and_then(|u| u.as_string());
+            let comment_body = comment.find("body")
+                .and_then(|b| b.as_string());
         }
     }
 }
