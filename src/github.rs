@@ -95,17 +95,11 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
                         Ok(new_issue) => {
                             let new_issue: BTreeMap<String, JsonValue> = new_issue;
                             let url = new_issue.get("html_url")
-                                .and_then(|url| {
-                                    // TODO: why can't I use as_str here?
-                                    match *url {
-                                        JsonValue::String(ref s) => Some(s.to_owned()),
-                                        _ => None
-                                    }
-                                } );
+                                .and_then(|url| url.as_string() );
                             let number: Option<i64> = new_issue.get("number")
                                 .and_then(|n| { n.as_i64() });
                             if let (Some(u), Some(n)) = (url, number) {
-                                Some(GithubIssue { url: u, number: n })
+                                Some(GithubIssue { url: u.to_owned(), number: n })
                             } else {
                                 None
                             }
