@@ -1,7 +1,5 @@
-use std::error::Error;
 use uuid::Uuid;
 use regex::Regex;
-use hyper::status::StatusCode;
 
 use conf;
 use message;
@@ -14,22 +12,6 @@ fn strip_leading_name(msg: &str) -> String {
         static ref RE: Regex = Regex::new(r"^/(\w+)\b").unwrap();
     }
     RE.replace(msg, "")
-}
-
-fn send_to_braid(msg: message::Message, braid_conf: &conf::TomlConf) {
-    match braid::send_braid_request(braid_conf, msg) {
-        Ok(r) => {
-            println!("Sent message to braid");
-            if r.status == StatusCode::Created {
-                println!("Message created!");
-            } else {
-                println!("Something went wrong: {:?}", r);
-            }
-        }
-        Err(e) =>
-            println!("Failed to send to braid: {:?}",
-                     e.description()),
-    }
 }
 
 pub fn parse_command(msg: message::Message, conf: conf::TomlConf) {
@@ -56,7 +38,7 @@ fn send_help_response(msg: message::Message, conf: conf::TomlConf) {
     help.push_str(format!("'/{} list' will get you the connected github repos\n", bot_name).as_str());
     help.push_str(format!("'/{} create <repo> <text...>' and I'll create an issue in <repo> with the title 'text...'\n", bot_name).as_str());
 
-    send_to_braid(message::response_to(msg, help), &braid_conf);
+    braid::send_braid_request(message::response_to(msg, help), &braid_conf);
 
 }
 
@@ -89,7 +71,7 @@ fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
                 reply.push_str("\n");
             }
             let msg = message::response_to(msg, reply);
-            send_to_braid(msg, &braid_conf);
+            braid::send_braid_request(msg, &braid_conf);
         }
         Err(e) => {
             println!("Error loading repos: {}", e);
@@ -121,15 +103,15 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
                                                        braid_response_tag_id,
                                                        braid_content);
             tracking::add_watched_thread(response_msg.thread_id, gh_issue.number);
-            send_to_braid(response_msg, &braid_conf);
+            braid::send_braid_request(response_msg, &braid_conf);
         } else {
             println!("Couldn't create issue");
             let err_resp = "Couldn't create issue, sorry".to_owned();
-            send_to_braid(message::response_to(msg, err_resp), &braid_conf);
+            braid::send_braid_request(message::response_to(msg, err_resp), &braid_conf);
         }
     } else {
         println!("Couldn't parse repo name");
         let err_resp = "Don't know which repo you mean, sorry".to_owned();
-        send_to_braid(message::response_to(msg, err_resp), &braid_conf);
+        braid::send_braid_request(message::response_to(msg, err_resp), &braid_conf);
     }
 }

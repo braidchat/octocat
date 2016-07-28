@@ -1,13 +1,13 @@
-use conf;
-use message;
+use std::error::Error;
 use hyper::header::{Headers,ContentType,Authorization,Basic};
-use hyper::client::{Client,Response};
-use hyper::error::Result as HttpResult;
+use hyper::client::Client;
+use hyper::status::StatusCode;
 use mime::{Mime,TopLevel,SubLevel};
 
+use conf;
+use message;
 
-pub fn send_braid_request(braid_conf: &conf::TomlConf, message: message::Message)
-    -> HttpResult<Response>
+pub fn send_braid_request(message: message::Message, braid_conf: &conf::TomlConf)
 {
     let api_url = braid_conf.get("api_url").unwrap().as_str().unwrap();
     let bot_id = braid_conf.get("app_id").unwrap().as_str().unwrap().to_owned();
@@ -20,10 +20,20 @@ pub fn send_braid_request(braid_conf: &conf::TomlConf, message: message::Message
                               SubLevel::Ext("transit+msgpack".to_owned()),
                               vec![])));
     headers.set(Authorization(Basic{username: bot_id, password: Some(token)}));
-    client.put(api_url)
-        .body(&body[..])
-        .headers(headers)
-        .send()
+    match client.put(api_url).body(&body[..]).headers(headers).send() {
+        Ok(r) => {
+            println!("Sent message to braid");
+            if r.status == StatusCode::Created {
+                println!("Message created!");
+            } else {
+                println!("Something went wrong: {:?}", r);
+            }
+        }
+        Err(e) =>
+            println!("Failed to send to braid: {:?}",
+                     e.description()),
+
+    }
 }
 
 pub fn thread_url(braid_conf: &conf::TomlConf, msg: &message::Message) -> String {
