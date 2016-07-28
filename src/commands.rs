@@ -97,41 +97,6 @@ fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
     }
 }
 
-fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf> {
-    if name.contains('/') {
-        let mut split = name.splitn(2, '/');
-        let org = split.next().unwrap();
-        let repo = split.next().unwrap();
-        conf.get("repos")
-            .and_then(|r| r.as_slice())
-            .and_then(|rs| {
-                let mut it = rs.iter();
-                it.find(|r| {
-                    let t = r.as_table();
-                    let o = t.and_then(|r| r.get("org"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_org| r_org == org);
-                    let r = t.and_then(|r| r.get("repo"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_repo| r_repo == repo);
-                    o && r
-                }).and_then(|found| found.as_table())
-            })
-    } else {
-        conf.get("repos")
-            .and_then(|r| r.as_slice())
-            .and_then(|rs| {
-                let mut it = rs.iter();
-                it.find(|r| {
-                    r.as_table()
-                        .and_then(|r| r.get("repo"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_name| r_name == name)
-                }).and_then(|found| found.as_table())
-            })
-    }
-}
-
 fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
@@ -139,7 +104,7 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
     let body = strip_leading_name(&msg.content[..]);
     let mut words = body.split_whitespace();
     let repo_conf = words.nth(1)
-        .and_then(|s| find_repo_conf(s.to_owned(), &conf));
+        .and_then(|s| github::find_repo_conf(s.to_owned(), &conf));
     let issue_title = words.collect::<Vec<_>>().join(" ");
     if let Some(repo_conf) = repo_conf {
         let content = format!("Created by octocat bot from [braid chat]({})",

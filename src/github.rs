@@ -26,6 +26,41 @@ fn send_github_request(token: &str, endpoint: &str, data: JsonValue) -> HttpResu
         .send()
 }
 
+pub fn find_repo_conf(name: String, conf: &TomlConf) -> Option<&TomlConf> {
+    if name.contains('/') {
+        let mut split = name.splitn(2, '/');
+        let org = split.next().unwrap();
+        let repo = split.next().unwrap();
+        conf.get("repos")
+            .and_then(|r| r.as_slice())
+            .and_then(|rs| {
+                let mut it = rs.iter();
+                it.find(|r| {
+                    let t = r.as_table();
+                    let o = t.and_then(|r| r.get("org"))
+                        .and_then(|n| n.as_str())
+                        .map_or(false, |r_org| r_org == org);
+                    let r = t.and_then(|r| r.get("repo"))
+                        .and_then(|n| n.as_str())
+                        .map_or(false, |r_repo| r_repo == repo);
+                    o && r
+                }).and_then(|found| found.as_table())
+            })
+    } else {
+        conf.get("repos")
+            .and_then(|r| r.as_slice())
+            .and_then(|rs| {
+                let mut it = rs.iter();
+                it.find(|r| {
+                    r.as_table()
+                        .and_then(|r| r.get("repo"))
+                        .and_then(|n| n.as_str())
+                        .map_or(false, |r_name| r_name == name)
+                }).and_then(|found| found.as_table())
+            })
+    }
+}
+
 pub struct GithubIssue {
     pub url: String,
     pub number: i64,
