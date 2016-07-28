@@ -45,7 +45,7 @@ fn main() {
         process::exit(1);
     }
     // Load configuration
-    let ref conf_filename = args[1];
+    let conf_filename = &args[1];
     let conf = conf::load_conf(&conf_filename[..]).expect("Couldn't load conf file!");
     let bind_port = conf::get_conf_val(&conf, "general", "port")
         .expect("Missing key port in section general");
@@ -53,9 +53,8 @@ fn main() {
     let braid_conf = conf::get_conf_group(&conf, "braid")
         .expect("Missing braid config information");
     let keys = ["name", "api_url", "app_id", "token"];
-    for i in 0..keys.len() {
-        let k = keys[i];
-        if !braid_conf.contains_key(k) {
+    for k in &keys {
+        if !braid_conf.contains_key(*k) {
             panic!("Missing braid configuration key '{}'", k);
         }
     }
