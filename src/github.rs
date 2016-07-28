@@ -62,8 +62,8 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
                             let url = new_issue.get("html_url")
                                 .and_then(|url| {
                                     // TODO: why can't I use as_str here?
-                                    match url {
-                                        &JsonValue::String(ref s) => Some(s.to_owned()),
+                                    match *url {
+                                        JsonValue::String(ref s) => Some(s.to_owned()),
                                         _ => None
                                     }
                                 } );

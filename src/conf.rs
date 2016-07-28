@@ -27,5 +27,5 @@ pub fn get_conf_val(conf: &TomlConf, group: &str, key: &str) -> Option<String> {
 }
 
 pub fn get_conf_group(conf: &TomlConf, group: &str) -> Option<toml::Table> {
-    conf.get(group).and_then(|v| v.as_table()).map(|t| t.clone())
+    conf.get(group).and_then(|v| v.as_table()).cloned()
 }

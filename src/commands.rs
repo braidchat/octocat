@@ -36,10 +36,9 @@ pub fn parse_command(msg: message::Message, conf: conf::TomlConf) {
     let body = strip_leading_name(&msg.content[..]);
     if let Some(command) = body.split_whitespace().next() {
         match &command[..] {
-            "help" => send_help_response(msg, conf),
             "list" => send_repos_list(msg, conf),
             "create" => create_github_issue(msg, conf),
-            _ => send_help_response(msg, conf)
+            "help" | _ => send_help_response(msg, conf),
         }
     }
 }
@@ -109,8 +108,8 @@ fn send_repos_list(msg: message::Message, conf: conf::TomlConf) {
 }
 
 fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf> {
-    if name.contains("/") {
-        let mut split = name.splitn(2, "/");
+    if name.contains('/') {
+        let mut split = name.splitn(2, '/');
         let org = split.next().unwrap();
         let repo = split.next().unwrap();
         conf.get("repos")
@@ -121,12 +120,10 @@ fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf
                     let t = r.as_table();
                     let o = t.and_then(|r| r.get("org"))
                         .and_then(|n| n.as_str())
-                        .map(|r_org| r_org == org)
-                        .unwrap_or(false);
+                        .map_or(false, |r_org| r_org == org);
                     let r = t.and_then(|r| r.get("repo"))
                         .and_then(|n| n.as_str())
-                        .map(|r_repo| r_repo == repo).
-                        unwrap_or(false);
+                        .map_or(false, |r_repo| r_repo == repo);
                     o && r
                 }).and_then(|found| found.as_table())
             })
@@ -139,8 +136,7 @@ fn find_repo_conf(name: String, conf: &conf::TomlConf) -> Option<&conf::TomlConf
                     r.as_table()
                         .and_then(|r| r.get("repo"))
                         .and_then(|n| n.as_str())
-                        .map(|r_name| r_name == name)
-                        .unwrap_or(false)
+                        .map_or(false, |r_name| r_name == name)
                 }).and_then(|found| found.as_table())
             })
     }

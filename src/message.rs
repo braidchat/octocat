@@ -63,7 +63,7 @@ where S: serde::Serializer {
     }
 }
 
-fn serialize_transit_uuid_seq<S>(uuids: &Vec<Uuid>, se: &mut S) -> Result<(), S::Error>
+fn serialize_transit_uuid_seq<S>(uuids: &[Uuid], se: &mut S) -> Result<(), S::Error>
 where S: serde::Serializer {
     let transit_uuids: Vec<TransitUuid> = uuids.into_iter().map(uuid_to_transit).collect();
     match transit_uuids.serialize(se) {
