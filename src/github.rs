@@ -7,6 +7,7 @@ use hyper::error::Result as HttpResult;
 use serde_json;
 use serde_json::value::{Value as JsonValue,Map};
 
+use conf;
 use tracking;
 use braid;
 use message;
@@ -149,10 +150,21 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
                 Some(comment) => comment,
                 None => { println!("No comment in issue!"); return }
             };
-            let commenter = comment.find_path(&["user", "login"])
-                .and_then(|u| u.as_string());
-            let comment_body = comment.find("body")
-                .and_then(|b| b.as_string());
+            let commenter = match comment.find_path(&["user", "login"])
+                .and_then(|u| u.as_string()) {
+                    Some(c) => c,
+                    None => { println!("Missing commenter)"); return }
+                };
+            let comment_body = match comment.find("body")
+                .and_then(|b| b.as_string()) {
+                    Some(b) => b,
+                    None => { println!("Missing comment body"); return }
+                };
+            let msg_body = format!("{} commented:\n{}", commenter, comment_body);
+            let msg = message::reply_to_thread(thread_id, msg_body);
+            let braid_conf = conf::get_conf_group(&conf, "braid")
+                .expect("Missing braid config information");
+            braid::send_braid_request(msg, &braid_conf);
         }
     }
 }

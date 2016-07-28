@@ -131,3 +131,17 @@ pub fn new_thread_msg(group: Uuid, tag: Uuid, content: String) -> Message {
         content: content,
     }
 }
+
+pub fn reply_to_thread(thread: Uuid, content: String) -> Message {
+    Message {
+        id: Uuid::new_v4(),
+        // user_id gets filled in by server
+        user_id: Uuid::new_v4(),
+        // if we're replying to an extant thread, group-id is filled in
+        group_id: Uuid::new_v4(),
+        thread_id: thread,
+        mentioned_user_ids: vec![],
+        mentioned_tag_ids: vec![],
+        content: content,
+    }
+}
