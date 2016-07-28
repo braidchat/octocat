@@ -135,10 +135,6 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
             let repo = repo.unwrap();
             let issue_number = issue_number.unwrap();
             println!("Update to issue {:?} in {:?}", issue_number, repo);
-            let repo_conf = match find_repo_conf(repo.to_owned(), &conf) {
-                Some(conf) => conf,
-                None => { println!("No conf for repo {}", repo); return }
-            };
             let thread_id = match tracking::thread_for_issue(issue_number) {
                 Some(id) => id,
                 None => {
@@ -146,7 +142,6 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
                     return
                 }
             };
-            println!("conf {:?} thread id {:?}", repo_conf, thread_id);
             let comment = match update.get("comment") {
                 Some(comment) => comment,
                 None => { println!("No comment in issue!"); return }
