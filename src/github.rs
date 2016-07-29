@@ -117,28 +117,79 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
     }
 }
 
+fn new_issue_from_webhook(issue_number: i64,
+                          payload: BTreeMap<String, JsonValue>,
+                          conf: TomlConf)
+{
+    let repo_name = match payload.get("repository")
+        .and_then(|r| r.as_object())
+        .and_then(|r| r.get("full_name"))
+        .and_then(|n| n.as_string()) {
+            Some(r) => r,
+            None => {
+                println!("Couldn't get repository from message");
+                return
+            }
+        };
+    let repo_conf = match find_repo_conf(repo_name.to_owned(), &conf) {
+        Some(c) => c,
+        None => {
+            println!("Couldn't find conf for {}", repo_name);
+            return
+        }
+    };
+
+    let issue = match payload.get("issue") {
+        Some(i) => i,
+        None => { println!("No issue in payload!"); return }
+    };
+
+    let creator = match issue.find_path(&["user", "login"])
+        .and_then(|u| u.as_string()) {
+            Some(u) => u,
+            None => { println!("Missing creator name"); return }
+        };
+    let issue_title = match issue.find("title")
+        .and_then(|t| t.as_string()) {
+            Some(t) => t,
+            None => { println!("Missing issue title"); return }
+        };
+    let issue_url = match issue.find("html_url")
+        .and_then(|u| u.as_string()) {
+            Some(u) => u,
+            None => { println!("Missing issue url"); return }
+        };
+    let content = format!("{} opened issue \"{}\"\n{}",
+                          creator, issue_title, issue_url);
+
+    let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
+        .expect("Couldn't load braid response tag id");
+    let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
+        .expect("Couldn't parse tag uuid");
+    let msg = message::new_thread_msg(braid_response_tag_id, content);
+    tracking::add_watched_thread(msg.thread_id, issue_number);
+    let braid_conf = conf::get_conf_group(&conf, "braid")
+        .expect("Missing braid config information");
+    braid::send_braid_request(msg, &braid_conf);
+}
+
 pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
     match serde_json::from_slice(&msg_body[..]) {
         Err(e) => println!("Couldn't parse update json: {:?}", e),
         Ok(update) => {
             let update: BTreeMap<String, JsonValue> = update;
-            let repo = update.get("repository")
-                .and_then(|r| r.as_object())
-                .and_then(|r| r.get("full_name"))
-                .and_then(|n| n.as_string() );
-            let issue_number = update.get("issue")
+            let issue_number = match update.get("issue")
                 .and_then(|i| i.as_object())
                 .and_then(|i| i.get("number"))
-                .and_then(|n| n.as_i64());
-            if repo.is_none() { println!("Couldn't get repo"); return }
-            if issue_number.is_none() { println!("Couldn't get issue #"); return }
-            let repo = repo.unwrap();
-            let issue_number = issue_number.unwrap();
-            println!("Update to issue {:?} in {:?}", issue_number, repo);
+                .and_then(|n| n.as_i64()) {
+                    Some(i) => i,
+                    None => { println!("Couldn't get issue #"); return }
+                };
+            println!("Update to issue {:?}", issue_number);
             let thread_id = match tracking::thread_for_issue(issue_number) {
                 Some(id) => id,
                 None => {
-                    println!("No thread for issue {} in {}", issue_number, repo);
+                    new_issue_from_webhook(issue_number, update, conf);
                     return
                 }
             };
@@ -149,7 +200,7 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
             let commenter = match comment.find_path(&["user", "login"])
                 .and_then(|u| u.as_string()) {
                     Some(c) => c,
-                    None => { println!("Missing commenter)"); return }
+                    None => { println!("Missing commenter"); return }
                 };
             let comment_body = match comment.find("body")
                 .and_then(|b| b.as_string()) {
@@ -157,11 +208,7 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
                     None => { println!("Missing comment body"); return }
                 };
             let msg_body = format!("{} commented:\n{}", commenter, comment_body);
-            // TODO: get group id from initial message instead of bot config
-            let braid_group = conf::get_conf_val(&conf, "braid", "group_id")
-                .and_then(|id| Uuid::parse_str(&id[..]).ok() )
-                .expect("Missing group id");
-            let msg = message::reply_to_thread(thread_id, braid_group, msg_body);
+            let msg = message::reply_to_thread(thread_id, msg_body);
             let braid_conf = conf::get_conf_group(&conf, "braid")
                 .expect("Missing braid config information");
             braid::send_braid_request(msg, &braid_conf);

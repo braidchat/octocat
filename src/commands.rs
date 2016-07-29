@@ -91,7 +91,6 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
     if let Some(repo_conf) = repo_conf {
         let content = format!("Created by octocat bot from [braid chat]({})",
         braid::thread_url(&braid_conf, &msg));
-        let group_id = msg.group_id;
         let gh_resp = github::create_issue(repo_conf, issue_title, content);
         if let Some(gh_issue) = gh_resp {
             let braid_content = format!("New issue opened: {}", gh_issue.url);
@@ -99,8 +98,7 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
                 .expect("Couldn't load braid response tag id");
             let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
                 .expect("Couldn't parse tag uuid");
-            let response_msg = message::new_thread_msg(group_id,
-                                                       braid_response_tag_id,
+            let response_msg = message::new_thread_msg(braid_response_tag_id,
                                                        braid_content);
             tracking::add_watched_thread(response_msg.thread_id, gh_issue.number);
             braid::send_braid_request(response_msg, &braid_conf);
