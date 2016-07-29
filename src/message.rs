@@ -63,7 +63,7 @@ where S: serde::Serializer {
     }
 }
 
-fn serialize_transit_uuid_seq<S>(uuids: &Vec<Uuid>, se: &mut S) -> Result<(), S::Error>
+fn serialize_transit_uuid_seq<S>(uuids: &[Uuid], se: &mut S) -> Result<(), S::Error>
 where S: serde::Serializer {
     let transit_uuids: Vec<TransitUuid> = uuids.into_iter().map(uuid_to_transit).collect();
     match transit_uuids.serialize(se) {
@@ -120,14 +120,28 @@ pub fn response_to(msg: Message, content: String) -> Message {
     }
 }
 
-pub fn new_thread_msg(group: Uuid, tag: Uuid, content: String) -> Message {
+pub fn new_thread_msg(tag: Uuid, content: String) -> Message {
     Message {
         id: Uuid::new_v4(),
         user_id: Uuid::new_v4(), // gets filled in by server
-        group_id: group,
+        group_id: Uuid::new_v4(), // gets filled in by server
         thread_id: Uuid::new_v4(),
         mentioned_user_ids: vec![],
         mentioned_tag_ids: vec![tag],
+        content: content,
+    }
+}
+
+pub fn reply_to_thread(thread: Uuid, content: String) -> Message {
+    Message {
+        id: Uuid::new_v4(),
+        // user_id gets filled in by server
+        user_id: Uuid::new_v4(),
+        // user_id gets filled in by server
+        group_id: Uuid::new_v4(),
+        thread_id: thread,
+        mentioned_user_ids: vec![],
+        mentioned_tag_ids: vec![],
         content: content,
     }
 }
