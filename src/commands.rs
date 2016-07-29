@@ -102,7 +102,9 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
             let response_msg = message::new_thread_msg(group_id,
                                                        braid_response_tag_id,
                                                        braid_content);
-            tracking::add_watched_thread(response_msg.thread_id, gh_issue.number);
+            tracking::add_watched_thread(response_msg.thread_id,
+                                         group_id,
+                                         gh_issue.number);
             braid::send_braid_request(response_msg, &braid_conf);
         } else {
             println!("Couldn't create issue");
