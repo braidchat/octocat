@@ -13,6 +13,7 @@ use routing;
 use message;
 use commands;
 use github;
+use tracking;
 
 fn verify_braid_hmac(mac: Vec<u8>, key: &[u8], data: &[u8]) -> bool {
     if let Some(mac) = String::from_utf8(mac).ok()
@@ -55,7 +56,13 @@ pub fn handle_braid_message(request: &mut Request, conf: conf::TomlConf) -> Resu
     println!("Mac OK");
     match message::decode_transit_msgpack(buf) {
         Some(msg) => {
-            thread::spawn(move || { commands::parse_command(msg, conf); });
+            thread::spawn(move || {
+                if let Some(thread) = tracking::issue_for_thread(msg.thread_id) {
+                    github::update_from_braid(thread, msg, conf);
+                } else {
+                    commands::parse_command(msg, conf);
+                }
+            });
         },
         None => println!("Couldn't parse message")
     }

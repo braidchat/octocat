@@ -1,11 +1,9 @@
-use uuid::Uuid;
 use regex::Regex;
 
 use conf;
 use message;
 use braid;
 use github;
-use tracking;
 
 fn strip_leading_name(msg: &str) -> String {
     lazy_static! {
@@ -86,22 +84,17 @@ fn create_github_issue(msg: message::Message, conf: conf::TomlConf) {
     let body = strip_leading_name(&msg.content[..]);
     let mut words = body.split_whitespace();
     let repo_conf = words.nth(1)
-        .and_then(|s| github::find_repo_conf(s.to_owned(), &conf));
+        .and_then(|s| github::find_repo_conf(s, &conf));
     let issue_title = words.collect::<Vec<_>>().join(" ");
     if let Some(repo_conf) = repo_conf {
-        let content = format!("Created by octocat bot from [braid chat]({})",
-        braid::thread_url(&braid_conf, &msg));
+        let content = format!(
+            "Created by octocat bot on behalf of {} from [braid chat]({})",
+            braid::get_user_nick(msg.user_id, &braid_conf).unwrap_or("a braid user".to_owned()),
+            braid::thread_url(&braid_conf, &msg));
         let gh_resp = github::create_issue(repo_conf, issue_title, content);
         if let Some(gh_issue) = gh_resp {
-            let braid_content = format!("New issue opened: {}", gh_issue.url);
-            let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
-                .expect("Couldn't load braid response tag id");
-            let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
-                .expect("Couldn't parse tag uuid");
-            let response_msg = message::new_thread_msg(braid_response_tag_id,
-                                                       braid_content);
-            tracking::add_watched_thread(response_msg.thread_id, gh_issue.number);
-            braid::send_braid_request(response_msg, &braid_conf);
+            // Opened webhook from github will open thread on braid
+            println!("Issue opened: {:?}", gh_issue);
         } else {
             println!("Couldn't create issue");
             let err_resp = "Couldn't create issue, sorry".to_owned();
