@@ -65,6 +65,7 @@ pub fn find_repo_conf<'a>(name: &str, conf: &'a TomlConf) -> Option<&'a TomlConf
     }
 }
 
+#[derive(Debug)]
 pub struct GithubIssue {
     pub url: String,
     pub number: i64,
@@ -186,11 +187,19 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str,
             return
         }
     };
-    // TODO: check that this wasn't a comment we posted
     let comment = match update.get("comment") {
         Some(comment) => comment,
         None => { println!("No comment in issue!"); return }
     };
+    let comment_id = match comment.find("id")
+        .and_then(|i| i.as_i64()) {
+        Some(i) => i,
+        None => { println!("Missing comment id!"); return }
+    };
+    if tracking::did_we_post_comment(thread_id, comment_id) {
+        println!("webhook for our own comment");
+        return
+    }
     let commenter = match comment.find_path(&["user", "login"])
         .and_then(|u| u.as_string()) {
             Some(c) => c,
@@ -272,11 +281,25 @@ pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message,
     map.insert(String::from("body"), JsonValue::String(comment));
     let data = JsonValue::Object(map);
     match send_github_request(token, &path[..], data) {
-        Err(e) => {
-            println!("Couldn't comment on issue: {:?}", e);
-        }
-        Ok(_) => {
-            println!("Commented on issue");
+        Err(e) => println!("Error sending github request: {:?}", e),
+        Ok(mut resp) => {
+            let mut buf = String::new();
+            match resp.read_to_string(&mut buf) {
+                Err(e) => println!("Error reading github response: {:?}", e),
+                Ok(_) => {
+                    match serde_json::from_str(&buf[..]) {
+                        Err(e) => println!("Couldn't parse json from github: {:?}", e),
+                        Ok(new_comment) => {
+                            let new_comment: JsonValue = new_comment;
+                            if let Some(id) = new_comment.find("id").and_then(|i| i.as_i64()) {
+                                tracking::track_comment(msg.thread_id, id);
+                            } else {
+                                println!("Couldn't get comment id");
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

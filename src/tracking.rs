@@ -18,7 +18,14 @@ pub fn setup_tables() {
                         CREATE TABLE IF NOT EXISTS watched_threads (
                          thread_id TEXT NOT NULL UNIQUE,
                          issue_number INTEGER NOT NULL,
-                         repository TEXT NOT NULL);
+                         repository TEXT NOT NULL
+                        );
+
+                        CREATE TABLE IF NOT EXISTS posted_comments (
+                         thread_id TEXT NOT NULL,
+                         comment_id INTEGER NOT NULL
+                        );
+
                         CREATE UNIQUE INDEX IF NOT EXISTS repo_idx
                          ON watched_threads (repository, issue_number);
                         COMMIT;")
@@ -79,5 +86,28 @@ pub fn issue_for_thread(thread_id: Uuid) -> Option<WatchedThread> {
             println!("Couldn't find issue for thread: {:?}", e);
             None
         }
+    }
+}
+
+pub fn track_comment(thread_id: Uuid, comment_id: i64) {
+    let conn = get_conn();
+
+    match conn.execute("INSERT INTO posted_comments (thread_id, comment_id)
+                        VALUES ($1, $2)",
+                        &[&thread_id.simple().to_string(), &comment_id]) {
+        Ok(_) => { println!("Tracking posted comment {} from {}", comment_id, thread_id); },
+        Err(e) => { println!("Couldn't track comment: {:?}", e); }
+    }
+}
+
+pub fn did_we_post_comment(thread_id: Uuid, comment_id: i64) -> bool {
+    let conn = get_conn();
+    match conn.query_row("SELECT count(*) FROM posted_comments
+                           WHERE thread_id = $0 AND comment_id = $1",
+                          &[&thread_id.simple().to_string(), &comment_id],
+                          |row| row.get::<_, i64>(0) != 0) {
+        // TODO: fix this
+        Ok(c) => { println!("c = {}", c); c},
+        Err(_) => false,
     }
 }
