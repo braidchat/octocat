@@ -181,6 +181,7 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
     let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
         Some(thread) => thread.thread_id,
         None => {
+            println!("Not tracking this issue though");
             return
         }
     };
@@ -214,6 +215,24 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
     braid::send_braid_request(msg, &braid_conf);
 }
 
+fn closed_issue_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: TomlConf) {
+    println!("Issue {} in {} closed", issue_number, repo_name);
+    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
+        Some(thread) => thread.thread_id,
+        None => {
+            println!("Not tracking this issue though");
+            return
+        }
+    };
+    let closer = update.find_path(&["sender", "login"])
+        .and_then(|u| u.as_string())
+        .unwrap_or("an unknown user");
+    let msg_body = format!("issue has been closed by {}", closer);
+    let msg = message::reply_to_thread(thread_id, msg_body);
+    let braid_conf = conf::get_conf_group(&conf, "braid").expect("Missing braid conf");
+    braid::send_braid_request(msg, &braid_conf);
+}
+
 pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
     match serde_json::from_slice(&msg_body[..]) {
         Err(e) => println!("Couldn't parse update json: {:?}", e),
@@ -241,7 +260,7 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
             match action {
                 "opened" => new_issue_from_webhook(issue_number, update.clone(), conf),
                 "created" => comment_from_webhook(issue_number, repo_name, update.clone(), conf),
-                // TODO: handle "closed" action
+                "closed" => closed_issue_from_webhook(issue_number, repo_name, update.clone(), conf),
                 _ => println!("Unknown action from webhook {}", action),
             }
         }
