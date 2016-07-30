@@ -47,17 +47,13 @@ fn main() {
     // Load configuration
     let conf_filename = &args[1];
     let conf = conf::load_conf(&conf_filename[..]).expect("Couldn't load conf file!");
-    let bind_port = conf::get_conf_val(&conf, "general", "port")
-        .expect("Missing key port in section general");
+    conf::validate_conf_group(&conf, "general", &["port"]);
+    conf::validate_conf_group(&conf, "braid", &["name", "api_url", "app_id", "token", "site_url"]);
+    conf::validate_conf_group(&conf, "github", &["webhook_secret"]);
+    // TODO: validate repos conf
+    let bind_port = conf::get_conf_val_n(&conf, "general", "port").unwrap();
     let bind_addr = format!("localhost:{}", bind_port);
-    let braid_conf = conf::get_conf_group(&conf, "braid")
-        .expect("Missing braid config information");
-    let keys = ["name", "api_url", "app_id", "token"];
-    for k in &keys {
-        if !braid_conf.contains_key(*k) {
-            panic!("Missing braid configuration key '{}'", k);
-        }
-    }
+    let braid_conf = conf::get_conf_group(&conf, "braid").unwrap();
     tracking::setup_tables();
     // Start server
     println!("Bot {:?} starting", braid_conf.get("name").unwrap().as_str().unwrap());

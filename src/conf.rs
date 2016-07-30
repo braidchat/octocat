@@ -26,6 +26,23 @@ pub fn get_conf_val(conf: &TomlConf, group: &str, key: &str) -> Option<String> {
         .map(|s| s.to_owned())
 }
 
+pub fn get_conf_val_n(conf: &TomlConf, group: &str, key: &str) -> Option<i64> {
+    conf.get(group)
+        .and_then(|v| v.as_table())
+        .and_then(|tbl| tbl.get(key))
+        .and_then(|key_v| key_v.as_integer())
+}
+
 pub fn get_conf_group(conf: &TomlConf, group: &str) -> Option<toml::Table> {
     conf.get(group).and_then(|v| v.as_table()).cloned()
+}
+
+pub fn validate_conf_group(conf: &TomlConf, group: &str, keys: &[&str]) {
+    let grp = get_conf_group(conf, group)
+        .expect(&format!("Mssing configuration for {}", group)[..]);
+    for k in keys {
+        if !grp.contains_key(*k) {
+            panic!("Missing {} configuration key '{}'", group, k);
+        }
+    }
 }
