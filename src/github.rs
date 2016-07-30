@@ -118,12 +118,10 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
 }
 
 fn new_issue_from_webhook(issue_number: i64,
-                          payload: BTreeMap<String, JsonValue>,
+                          payload: JsonValue,
                           conf: TomlConf)
 {
-    let repo_name = match payload.get("repository")
-        .and_then(|r| r.as_object())
-        .and_then(|r| r.get("full_name"))
+    let repo_name = match payload.find_path(&["repository", "full_name"])
         .and_then(|n| n.as_string()) {
             Some(r) => r,
             None => {
@@ -143,7 +141,7 @@ fn new_issue_from_webhook(issue_number: i64,
         }
     };
 
-    let issue = match payload.get("issue") {
+    let issue = match payload.find("issue") {
         Some(i) => i,
         None => { println!("No issue in payload!"); return }
     };
@@ -178,8 +176,7 @@ fn new_issue_from_webhook(issue_number: i64,
     braid::start_watching_thread(msg.thread_id, &braid_conf);
 }
 
-fn comment_from_webhook(issue_number: i64, repo_name: &str,
-                        update: BTreeMap<String, JsonValue>, conf: TomlConf) {
+fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: TomlConf) {
     println!("Update to issue {:?}", issue_number);
     let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
         Some(thread) => thread.thread_id,
@@ -187,7 +184,7 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str,
             return
         }
     };
-    let comment = match update.get("comment") {
+    let comment = match update.find("comment") {
         Some(comment) => comment,
         None => { println!("No comment in issue!"); return }
     };
@@ -222,10 +219,8 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
         Err(e) => println!("Couldn't parse update json: {:?}", e),
         Ok(update) => {
             // TODO: need to also check if it's issue closing/opening or whatever
-            let update: BTreeMap<String, JsonValue> = update;
-            let repo_name = match update.get("repository")
-                .and_then(|r| r.as_object())
-                .and_then(|r| r.get("full_name"))
+            let update: JsonValue = update;
+            let repo_name = match update.find_path(&["repository", "full_name"])
                 .and_then(|n| n.as_string()) {
                     Some(r) => r,
                     None => {
@@ -233,17 +228,20 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
                         return
                     }
                 };
-            let issue_number = match update.get("issue")
-                .and_then(|i| i.as_object())
-                .and_then(|i| i.get("number"))
+            let issue_number = match update.find_path(&["issue", "number"])
                 .and_then(|n| n.as_i64()) {
                     Some(i) => i,
                     None => { println!("Couldn't get issue #"); return }
                 };
-            let action = update.get("action").expect("Missing action").as_string().unwrap();
+            let action = match update.find("action")
+                .and_then(|a| a.as_string()) {
+                    Some(a) => a,
+                    None => { println!("Couldn't get issue action!"); return }
+                };
             match action {
                 "opened" => new_issue_from_webhook(issue_number, update.clone(), conf),
                 "created" => comment_from_webhook(issue_number, repo_name, update.clone(), conf),
+                // TODO: handle "closed" action
                 _ => println!("Unknown action from webhook {}", action),
             }
         }
