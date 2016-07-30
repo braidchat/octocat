@@ -237,7 +237,6 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
     match serde_json::from_slice(&msg_body[..]) {
         Err(e) => println!("Couldn't parse update json: {:?}", e),
         Ok(update) => {
-            // TODO: need to also check if it's issue closing/opening or whatever
             let update: JsonValue = update;
             let repo_name = match update.find_path(&["repository", "full_name"])
                 .and_then(|n| n.as_string()) {
