@@ -36,3 +36,7 @@ org = "jamesnvc"
 repo = "emacs.d"
 tag_id = "some braid tag id"
 ```
+
+## Octocat in Action
+
+![Bot running demo](https://s3.amazonaws.com/chat.leanpixel.com/uploads/579c1378-7d27-4454-8864-738df842d6fa/demo2.gif)
