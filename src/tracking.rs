@@ -106,8 +106,7 @@ pub fn did_we_post_comment(thread_id: Uuid, comment_id: i64) -> bool {
                            WHERE thread_id = $0 AND comment_id = $1",
                           &[&thread_id.simple().to_string(), &comment_id],
                           |row| row.get::<_, i64>(0) != 0) {
-        // TODO: fix this
-        Ok(c) => { println!("c = {}", c); c},
+        Ok(c) => c,
         Err(_) => false,
     }
 }
