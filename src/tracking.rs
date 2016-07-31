@@ -1,9 +1,11 @@
 use uuid::Uuid;
 use rusqlite::Connection;
 
-fn get_conn() -> Connection {
-    // TODO: get db name from conf and/or base on bot name
-    Connection::open("threads_issues.sqlite").expect("Couldn't open database!")
+use app_conf::AppConf;
+
+fn get_conn(conf: &AppConf) -> Connection {
+    Connection::open(&conf.general.db_name[..])
+        .expect("Couldn't open database!")
 }
 
 pub struct WatchedThread {
@@ -12,8 +14,8 @@ pub struct WatchedThread {
     pub repository: String,
 }
 
-pub fn setup_tables() {
-    let conn = get_conn();
+pub fn setup_tables(conf: &AppConf) {
+    let conn = get_conn(conf);
     conn.execute_batch("BEGIN;
                         CREATE TABLE IF NOT EXISTS watched_threads (
                          thread_id TEXT NOT NULL UNIQUE,
@@ -32,8 +34,12 @@ pub fn setup_tables() {
         .expect("Couldn't create the table");
 }
 
-pub fn add_watched_thread(thread_id: Uuid, repo: String, issue_number: i64) {
-    let conn = get_conn();
+pub fn add_watched_thread(thread_id: Uuid,
+                          repo: String,
+                          issue_number: i64,
+                          conf: &AppConf)
+{
+    let conn = get_conn(conf);
 
     match conn.execute("INSERT INTO watched_threads (thread_id, issue_number, repository)
                   VALUES ($1, $2, $3)",
@@ -46,8 +52,9 @@ pub fn add_watched_thread(thread_id: Uuid, repo: String, issue_number: i64) {
 
 }
 
-pub fn thread_for_issue(repo: String, issue_number: i64) -> Option<WatchedThread> {
-    let conn = get_conn();
+pub fn thread_for_issue(repo: String, issue_number: i64, conf: &AppConf) -> Option<WatchedThread>
+{
+    let conn = get_conn(conf);
 
     match conn.query_row("SELECT thread_id FROM watched_threads
                     WHERE repository = $0 AND issue_number = $1",
@@ -68,8 +75,8 @@ pub fn thread_for_issue(repo: String, issue_number: i64) -> Option<WatchedThread
 }
 
 
-pub fn issue_for_thread(thread_id: Uuid) -> Option<WatchedThread> {
-    let conn = get_conn();
+pub fn issue_for_thread(thread_id: Uuid, conf: &AppConf) -> Option<WatchedThread> {
+    let conn = get_conn(conf);
 
     match conn.query_row(
         "SELECT issue_number, repository FROM watched_threads
@@ -89,8 +96,8 @@ pub fn issue_for_thread(thread_id: Uuid) -> Option<WatchedThread> {
     }
 }
 
-pub fn track_comment(thread_id: Uuid, comment_id: i64) {
-    let conn = get_conn();
+pub fn track_comment(thread_id: Uuid, comment_id: i64, conf: &AppConf) {
+    let conn = get_conn(conf);
 
     match conn.execute("INSERT INTO posted_comments (thread_id, comment_id)
                         VALUES ($1, $2)",
@@ -100,8 +107,9 @@ pub fn track_comment(thread_id: Uuid, comment_id: i64) {
     }
 }
 
-pub fn did_we_post_comment(thread_id: Uuid, comment_id: i64) -> bool {
-    let conn = get_conn();
+pub fn did_we_post_comment(thread_id: Uuid, comment_id: i64, conf: &AppConf) -> bool
+{
+    let conn = get_conn(conf);
     match conn.query_row("SELECT count(*) FROM posted_comments
                            WHERE thread_id = $0 AND comment_id = $1",
                           &[&thread_id.simple().to_string(), &comment_id],

@@ -15,6 +15,7 @@ Example conf.toml:
 ```
 [general]
 port = "7777"
+db_name = "octocat_db.sqlite"
 
 [braid]
 name = "octocat"

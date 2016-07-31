@@ -110,10 +110,12 @@ fn new_issue_from_webhook(issue_number: i64, payload: JsonValue, conf: AppConf)
                 return
             }
         };
-    if tracking::thread_for_issue(repo_name.to_owned(), issue_number).is_some() {
-        println!("Already tracking this issue");
-        return
-    }
+    if tracking::thread_for_issue(repo_name.to_owned(), issue_number, &conf)
+        .is_some()
+        {
+            println!("Already tracking this issue");
+            return
+        }
     let repo_conf = match find_repo_conf(repo_name, &conf) {
         Some(c) => c,
         None => {
@@ -148,14 +150,18 @@ fn new_issue_from_webhook(issue_number: i64, payload: JsonValue, conf: AppConf)
     let braid_response_tag_id = repo_conf.tag_id;
     let msg = message::new_thread_msg(braid_response_tag_id, content);
     let braid_conf = conf.braid.clone();
-    tracking::add_watched_thread(msg.thread_id, repo_name.to_owned(), issue_number);
+    tracking::add_watched_thread(msg.thread_id, repo_name.to_owned(),
+                                 issue_number, &conf);
     braid::send_braid_request(msg.clone(), &braid_conf);
     braid::start_watching_thread(msg.thread_id, &braid_conf);
 }
 
 fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: AppConf) {
     println!("Update to issue {:?}", issue_number);
-    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
+    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(),
+                                                     issue_number,
+                                                     &conf)
+    {
         Some(thread) => thread.thread_id,
         None => {
             println!("Not tracking this issue though");
@@ -171,7 +177,7 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
         Some(i) => i,
         None => { println!("Missing comment id!"); return }
     };
-    if tracking::did_we_post_comment(thread_id, comment_id) {
+    if tracking::did_we_post_comment(thread_id, comment_id, &conf) {
         println!("webhook for our own comment");
         return
     }
@@ -192,7 +198,9 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
 
 fn closed_issue_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: AppConf) {
     println!("Issue {} in {} closed", issue_number, repo_name);
-    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
+    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(),
+                                                     issue_number, &conf)
+    {
         Some(thread) => thread.thread_id,
         None => {
             println!("Not tracking this issue though");
@@ -258,9 +266,9 @@ pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message,
                        thread.issue_number);
 
     let comment = format!("{} commented via [braid]({}):\n{}",
-                          comment_user,
-                          braid::thread_url(&conf.braid, &msg),
-                          msg.content);
+    comment_user,
+    braid::thread_url(&conf.braid, &msg),
+    msg.content);
     let mut map = Map::new();
     map.insert(String::from("body"), JsonValue::String(comment));
     let data = JsonValue::Object(map);
@@ -276,7 +284,9 @@ pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message,
                         Ok(new_comment) => {
                             let new_comment: JsonValue = new_comment;
                             if let Some(id) = new_comment.find("id").and_then(|i| i.as_i64()) {
-                                tracking::track_comment(msg.thread_id, id);
+                                tracking::track_comment(msg.thread_id,
+                                                        id,
+                                                        &conf);
                             } else {
                                 println!("Couldn't get comment id");
                             }

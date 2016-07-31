@@ -56,7 +56,9 @@ pub fn handle_braid_message(request: &mut Request, conf: AppConf) -> Result<Resp
     match message::decode_transit_msgpack(buf) {
         Some(msg) => {
             thread::spawn(move || {
-                if let Some(thread) = tracking::issue_for_thread(msg.thread_id) {
+                if let Some(thread) = tracking::issue_for_thread(msg.thread_id,
+                                                                 &conf)
+                {
                     github::update_from_braid(thread, msg, conf);
                 } else {
                     commands::parse_command(msg, conf);

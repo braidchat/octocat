@@ -5,6 +5,7 @@ use conf;
 #[derive(Clone)]
 pub struct GeneralConf {
     pub port: i64,
+    pub db_name: String,
 }
 
 #[derive(Clone)]
@@ -40,7 +41,7 @@ pub struct AppConf {
 pub fn load_conf(conf_filename: &str) -> AppConf {
     let conf = conf::load_conf(conf_filename)
         .expect("Couldn't load conf file!");
-    conf::validate_conf_group(&conf, "general", &["port"]);
+    conf::validate_conf_group(&conf, "general", &["port", "db_name"]);
     conf::validate_conf_group(&conf, "braid",
                               &["name", "api_url", "app_id", "token",
                                 "site_url"]);
@@ -48,6 +49,7 @@ pub fn load_conf(conf_filename: &str) -> AppConf {
     // Can unwrap below, since we've validated keys up here
     let general = GeneralConf {
         port: conf::get_conf_val_n(&conf, "general", "port").unwrap(),
+        db_name: conf::get_conf_val(&conf, "general", "db_name").unwrap(),
     };
     let braid = BraidConf {
         name: conf::get_conf_val(&conf, "braid", "name")

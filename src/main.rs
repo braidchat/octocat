@@ -48,7 +48,7 @@ fn main() {
     // Load configuration
     let conf_filename = &args[1];
     let conf = app_conf::load_conf(&conf_filename[..]);
-    tracking::setup_tables();
+    tracking::setup_tables(&conf);
     // Start server
     let bind_addr = format!("localhost:{}", conf.general.port);
     println!("Bot {:?} starting", conf.braid.name);
