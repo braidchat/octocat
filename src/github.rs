@@ -1,4 +1,3 @@
-use conf::TomlConf;
 use std::io::Read;
 use std::collections::BTreeMap;
 use hyper::client::{Client,Response};
@@ -6,9 +5,8 @@ use hyper::header::{Headers,ContentType,Authorization,Bearer,UserAgent};
 use hyper::error::Result as HttpResult;
 use serde_json;
 use serde_json::value::{Value as JsonValue,Map};
-use uuid::Uuid;
 
-use conf;
+use app_conf::{AppConf,RepoConf};
 use tracking;
 use braid;
 use message;
@@ -30,38 +28,24 @@ fn send_github_request(token: &str, endpoint: &str, data: JsonValue) -> HttpResu
         .send()
 }
 
-pub fn find_repo_conf<'a>(name: &str, conf: &'a TomlConf) -> Option<&'a TomlConf> {
+pub fn find_repo_conf<'a>(name: &str, conf: &'a AppConf) -> Option<&'a RepoConf> {
     if name.contains('/') {
         let mut split = name.splitn(2, '/');
         let org = split.next().unwrap();
         let repo = split.next().unwrap();
-        conf.get("repos")
-            .and_then(|r| r.as_slice())
-            .and_then(|rs| {
-                let mut it = rs.iter();
-                it.find(|r| {
-                    let t = r.as_table();
-                    let o = t.and_then(|r| r.get("org"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_org| r_org == org);
-                    let r = t.and_then(|r| r.get("repo"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_repo| r_repo == repo);
-                    o && r
-                }).and_then(|found| found.as_table())
-            })
+        for r in &conf.repos {
+            if r.repo == repo && r.org == org {
+                return Some(r)
+            }
+        }
+        None
     } else {
-        conf.get("repos")
-            .and_then(|r| r.as_slice())
-            .and_then(|rs| {
-                let mut it = rs.iter();
-                it.find(|r| {
-                    r.as_table()
-                        .and_then(|r| r.get("repo"))
-                        .and_then(|n| n.as_str())
-                        .map_or(false, |r_name| r_name == name)
-                }).and_then(|found| found.as_table())
-            })
+        for r in &conf.repos {
+            if r.repo == name {
+                return Some(r)
+            }
+        }
+        None
     }
 }
 
@@ -71,17 +55,16 @@ pub struct GithubIssue {
     pub number: i64,
 }
 
-pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
+pub fn create_issue(github_conf: &RepoConf, title: String, content: String)
     -> Option<GithubIssue>
 {
-    let token = github_conf.get("token").and_then(|token| token.as_str()).expect("Missing GitHub token");
-
-    let owner = github_conf.get("org").and_then(|org| org.as_str()).expect("Missing GitHub org");
-    let repo = github_conf.get("repo").and_then(|repo| repo.as_str()).expect("Missing GitHub repo");
+    let token = github_conf.token.clone();
+    let owner = github_conf.org.clone();
+    let repo = github_conf.repo.clone();
     let mut path = String::from("/repos/");
-    path.push_str(owner);
+    path.push_str(&owner[..]);
     path.push_str("/");
-    path.push_str(repo);
+    path.push_str(&repo[..]);
     path.push_str("/issues");
 
     let mut map = Map::new();
@@ -89,7 +72,7 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
     map.insert(String::from("body"), JsonValue::String(content));
     let data = JsonValue::Object(map);
 
-    match send_github_request(token, path.as_str(), data) {
+    match send_github_request(&token[..], path.as_str(), data) {
         Err(e) => { println!("Error fetching from github: {:?}", e); None }
         Ok(mut resp) => {
             let mut buf = String::new();
@@ -117,9 +100,7 @@ pub fn create_issue(github_conf: &TomlConf, title: String, content: String)
     }
 }
 
-fn new_issue_from_webhook(issue_number: i64,
-                          payload: JsonValue,
-                          conf: TomlConf)
+fn new_issue_from_webhook(issue_number: i64, payload: JsonValue, conf: AppConf)
 {
     let repo_name = match payload.find_path(&["repository", "full_name"])
         .and_then(|n| n.as_string()) {
@@ -129,10 +110,12 @@ fn new_issue_from_webhook(issue_number: i64,
                 return
             }
         };
-    if tracking::thread_for_issue(repo_name.to_owned(), issue_number).is_some() {
-        println!("Already tracking this issue");
-        return
-    }
+    if tracking::thread_for_issue(repo_name.to_owned(), issue_number, &conf)
+        .is_some()
+        {
+            println!("Already tracking this issue");
+            return
+        }
     let repo_conf = match find_repo_conf(repo_name, &conf) {
         Some(c) => c,
         None => {
@@ -164,21 +147,21 @@ fn new_issue_from_webhook(issue_number: i64,
     let content = format!("{} opened issue \"{}\"\n{}",
                           creator, issue_title, issue_url);
 
-    let braid_response_tag = repo_conf.get("tag_id").and_then(|t| t.as_str())
-        .expect("Couldn't load braid response tag id");
-    let braid_response_tag_id = Uuid::parse_str(braid_response_tag)
-        .expect("Couldn't parse tag uuid");
+    let braid_response_tag_id = repo_conf.tag_id;
     let msg = message::new_thread_msg(braid_response_tag_id, content);
-    let braid_conf = conf::get_conf_group(&conf, "braid")
-        .expect("Missing braid config information");
-    tracking::add_watched_thread(msg.thread_id, repo_name.to_owned(), issue_number);
+    let braid_conf = conf.braid.clone();
+    tracking::add_watched_thread(msg.thread_id, repo_name.to_owned(),
+                                 issue_number, &conf);
     braid::send_braid_request(msg.clone(), &braid_conf);
     braid::start_watching_thread(msg.thread_id, &braid_conf);
 }
 
-fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: TomlConf) {
+fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: AppConf) {
     println!("Update to issue {:?}", issue_number);
-    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
+    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(),
+                                                     issue_number,
+                                                     &conf)
+    {
         Some(thread) => thread.thread_id,
         None => {
             println!("Not tracking this issue though");
@@ -194,7 +177,7 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
         Some(i) => i,
         None => { println!("Missing comment id!"); return }
     };
-    if tracking::did_we_post_comment(thread_id, comment_id) {
+    if tracking::did_we_post_comment(thread_id, comment_id, &conf) {
         println!("webhook for our own comment");
         return
     }
@@ -210,14 +193,14 @@ fn comment_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, c
         };
     let msg_body = format!("{} commented:\n{}", commenter, comment_body);
     let msg = message::reply_to_thread(thread_id, msg_body);
-    let braid_conf = conf::get_conf_group(&conf, "braid")
-        .expect("Missing braid config information");
-    braid::send_braid_request(msg, &braid_conf);
+    braid::send_braid_request(msg, &conf.braid);
 }
 
-fn closed_issue_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: TomlConf) {
+fn closed_issue_from_webhook(issue_number: i64, repo_name: &str, update: JsonValue, conf: AppConf) {
     println!("Issue {} in {} closed", issue_number, repo_name);
-    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(), issue_number) {
+    let thread_id = match tracking::thread_for_issue(repo_name.to_owned(),
+                                                     issue_number, &conf)
+    {
         Some(thread) => thread.thread_id,
         None => {
             println!("Not tracking this issue though");
@@ -229,11 +212,10 @@ fn closed_issue_from_webhook(issue_number: i64, repo_name: &str, update: JsonVal
         .unwrap_or("an unknown user");
     let msg_body = format!("issue has been closed by {}", closer);
     let msg = message::reply_to_thread(thread_id, msg_body);
-    let braid_conf = conf::get_conf_group(&conf, "braid").expect("Missing braid conf");
-    braid::send_braid_request(msg, &braid_conf);
+    braid::send_braid_request(msg, &conf.braid);
 }
 
-pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
+pub fn update_from_github(msg_body: Vec<u8>, conf: AppConf) {
     match serde_json::from_slice(&msg_body[..]) {
         Err(e) => println!("Couldn't parse update json: {:?}", e),
         Ok(update) => {
@@ -266,11 +248,9 @@ pub fn update_from_github(msg_body: Vec<u8>, conf: TomlConf) {
     }
 }
 
-pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message, conf: TomlConf)
+pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message, conf: AppConf)
 {
-    let braid_conf = conf::get_conf_group(&conf, "braid")
-        .expect("Missing braid config information");
-    let comment_user = braid::get_user_nick(msg.user_id, &braid_conf)
+    let comment_user = braid::get_user_nick(msg.user_id, &conf.braid)
         .unwrap_or("some braid user".to_owned());
 
     let repo_name = thread.repository;
@@ -281,22 +261,18 @@ pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message,
             return
         }
     };
-    let token = match repo_conf.get("token").and_then(|token| token.as_str()) {
-        Some(tok) => tok,
-        None => { println!("Missing token for {}", repo_name); return }
-    };
-
+    let token = repo_conf.token.clone();
     let path = format!("/repos/{}/issues/{}/comments", repo_name,
                        thread.issue_number);
 
     let comment = format!("{} commented via [braid]({}):\n{}",
-                          comment_user,
-                          braid::thread_url(&braid_conf, &msg),
-                          msg.content);
+    comment_user,
+    braid::thread_url(&conf.braid, &msg),
+    msg.content);
     let mut map = Map::new();
     map.insert(String::from("body"), JsonValue::String(comment));
     let data = JsonValue::Object(map);
-    match send_github_request(token, &path[..], data) {
+    match send_github_request(&token[..], &path[..], data) {
         Err(e) => println!("Error sending github request: {:?}", e),
         Ok(mut resp) => {
             let mut buf = String::new();
@@ -308,7 +284,9 @@ pub fn update_from_braid(thread: tracking::WatchedThread, msg: message::Message,
                         Ok(new_comment) => {
                             let new_comment: JsonValue = new_comment;
                             if let Some(id) = new_comment.find("id").and_then(|i| i.as_i64()) {
-                                tracking::track_comment(msg.thread_id, id);
+                                tracking::track_comment(msg.thread_id,
+                                                        id,
+                                                        &conf);
                             } else {
                                 println!("Couldn't get comment id");
                             }

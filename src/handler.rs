@@ -8,7 +8,7 @@ use openssl::crypto::hash::Type;
 // to make from_hex on strings work
 use rustc_serialize::hex::FromHex;
 
-use conf;
+use app_conf::AppConf;
 use routing;
 use message;
 use commands;
@@ -38,15 +38,14 @@ fn verify_github_hmac(mac: Vec<u8>, key: &[u8], data: &[u8]) -> bool {
 }
 
 
-pub fn handle_braid_message(request: &mut Request, conf: conf::TomlConf) -> Result<Response,IronError> {
+pub fn handle_braid_message(request: &mut Request, conf: AppConf) -> Result<Response,IronError> {
     // Verify MAC
     let mac = try!(request.headers.get_raw("X-Braid-Signature")
                    .and_then(|h| h.get(0))
                    .ok_or(IronError::new(routing::MissingMac,
                                          status::Unauthorized)));
 
-    let braid_token = conf::get_conf_val(&conf, "braid", "token").unwrap();
-
+    let braid_token = conf.braid.token.clone();
     let mut buf = Vec::new();
     request.body.read_to_end(&mut buf).unwrap(); // TODO: check
     if !verify_braid_hmac(mac.clone(), braid_token.as_bytes(), &buf[..]) {
@@ -57,7 +56,9 @@ pub fn handle_braid_message(request: &mut Request, conf: conf::TomlConf) -> Resu
     match message::decode_transit_msgpack(buf) {
         Some(msg) => {
             thread::spawn(move || {
-                if let Some(thread) = tracking::issue_for_thread(msg.thread_id) {
+                if let Some(thread) = tracking::issue_for_thread(msg.thread_id,
+                                                                 &conf)
+                {
                     github::update_from_braid(thread, msg, conf);
                 } else {
                     commands::parse_command(msg, conf);
@@ -69,12 +70,12 @@ pub fn handle_braid_message(request: &mut Request, conf: conf::TomlConf) -> Resu
     Ok(Response::with((status::Ok, "ok")))
 }
 
-pub fn handle_github_webhook(request: &mut Request, conf: conf::TomlConf) -> Result<Response,IronError> {
+pub fn handle_github_webhook(request: &mut Request, conf: AppConf) -> Result<Response,IronError> {
     let mac = try!(request.headers.get_raw("X-Hub-Signature")
                    .and_then(|h| h.get(0))
                    .ok_or(IronError::new(routing::MissingMac, status::Unauthorized)));
 
-    let github_token = conf::get_conf_val(&conf, "github", "webhook_secret").unwrap();
+    let github_token = conf.github.webhook_secret.clone();
     let mut buf = Vec::new();
     match request.body.read_to_end(&mut buf) {
         Err(e) => {
