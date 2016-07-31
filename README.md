@@ -8,6 +8,7 @@ To set up:
 
   - Generate an access token with `repo` scope at [https://github.com/settings/tokens](https://github.com/settings/tokens)
   - Add a webhook on Github from the relevant repository (from repo Settings), with the triggered events "Issues" and "Issue Comment"
+  - Add the bot on Braid, with the path of webhook url being `/message`
 
 
 Example conf.toml:
