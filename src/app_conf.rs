@@ -65,7 +65,7 @@ pub fn load_conf(conf_filename: &str) -> AppConf {
         webhook_secret: conf::get_conf_val(&conf, "github", "webhook_secret")
             .unwrap().to_owned(),
     };
-    let repos = vec![];
+    let mut repos = vec![];
     for r in conf.get("repos").and_then(|r| r.as_slice())
         .expect("Missing conf for repos!") {
             let t = r.as_table()

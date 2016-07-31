@@ -6,15 +6,12 @@ use hyper::status::StatusCode;
 use mime::{Mime,TopLevel,SubLevel};
 use uuid::Uuid;
 
-use conf;
+use app_conf::BraidConf;
 use message;
 
-pub fn send_braid_request(message: message::Message, braid_conf: &conf::TomlConf)
+pub fn send_braid_request(message: message::Message, braid_conf: &BraidConf)
 {
-    let api_site = braid_conf.get("api_url").unwrap().as_str().unwrap();
-    let api_url = format!("{}/bots/message", api_site);
-    let bot_id = braid_conf.get("app_id").unwrap().as_str().unwrap().to_owned();
-    let token = braid_conf.get("token").unwrap().as_str().unwrap().to_owned();
+    let api_url = format!("{}/bots/message", braid_conf.api_url);
     let body = message::encode_transit_msgpack(message)
         .expect("Couldn't encode body to send!");
     let client = Client::new();
@@ -22,7 +19,9 @@ pub fn send_braid_request(message: message::Message, braid_conf: &conf::TomlConf
     headers.set(ContentType(Mime(TopLevel::Application,
                               SubLevel::Ext("transit+msgpack".to_owned()),
                               vec![])));
-    headers.set(Authorization(Basic{username: bot_id, password: Some(token)}));
+    headers.set(Authorization(Basic{
+        username: braid_conf.app_id.clone(),
+        password: Some(braid_conf.token.clone())}));
     match client.put(&api_url[..]).body(&body[..]).headers(headers).send() {
         Ok(r) => {
             println!("Sent message to braid");
@@ -38,13 +37,13 @@ pub fn send_braid_request(message: message::Message, braid_conf: &conf::TomlConf
     }
 }
 
-pub fn get_user_nick(user_id: Uuid, braid_conf: &conf::TomlConf) -> Option<String> {
-    let api_site = braid_conf.get("api_url").unwrap().as_str().unwrap();
-    let api_url = format!("{}/bots/names/{}", api_site, user_id.hyphenated().to_string());
-    let bot_id = braid_conf.get("app_id").unwrap().as_str().unwrap().to_owned();
-    let token = braid_conf.get("token").unwrap().as_str().unwrap().to_owned();
+pub fn get_user_nick(user_id: Uuid, braid_conf: &BraidConf) -> Option<String> {
+    let api_url = format!("{}/bots/names/{}", braid_conf.api_url,
+                          user_id.hyphenated().to_string());
     let mut headers = Headers::new();
-    headers.set(Authorization(Basic{username: bot_id, password: Some(token)}));
+    headers.set(Authorization(Basic {
+        username: braid_conf.app_id.clone(),
+        password: Some(braid_conf.token.clone())}));
     let client = Client::new();
     match client.get(&api_url[..]).headers(headers).send() {
         Ok(mut r) => {
@@ -64,18 +63,17 @@ pub fn get_user_nick(user_id: Uuid, braid_conf: &conf::TomlConf) -> Option<Strin
     }
 }
 
-pub fn thread_url(braid_conf: &conf::TomlConf, msg: &message::Message) -> String {
-    let site_url = braid_conf.get("site_url").unwrap().as_str().unwrap();
-    format!("{}/{}/thread/{}", site_url, msg.group_id, msg.thread_id)
+pub fn thread_url(braid_conf: &BraidConf, msg: &message::Message) -> String {
+    format!("{}/{}/thread/{}", braid_conf.site_url, msg.group_id, msg.thread_id)
 }
 
-pub fn start_watching_thread(thread_id: Uuid, braid_conf: &conf::TomlConf) {
-    let api_site = braid_conf.get("api_url").unwrap().as_str().unwrap();
-    let api_url = format!("{}/bots/subscribe/{}", api_site, thread_id.hyphenated().to_string());
-    let bot_id = braid_conf.get("app_id").unwrap().as_str().unwrap().to_owned();
-    let token = braid_conf.get("token").unwrap().as_str().unwrap().to_owned();
+pub fn start_watching_thread(thread_id: Uuid, braid_conf: &BraidConf) {
+    let api_url = format!("{}/bots/subscribe/{}", braid_conf.api_url,
+                          thread_id.hyphenated().to_string());
     let mut headers = Headers::new();
-    headers.set(Authorization(Basic{username: bot_id, password: Some(token)}));
+    headers.set(Authorization(Basic {
+        username: braid_conf.app_id.clone(),
+        password: Some(braid_conf.token.clone())}));
     let client = Client::new();
     match client.put(&api_url[..]).headers(headers).send() {
         Ok(r) => {

@@ -28,6 +28,7 @@ use std::process;
 use iron::{Iron,Request,IronError};
 use iron::{method,status};
 
+mod app_conf;
 mod conf;
 mod routing;
 mod message;
@@ -46,17 +47,11 @@ fn main() {
     }
     // Load configuration
     let conf_filename = &args[1];
-    let conf = conf::load_conf(&conf_filename[..]).expect("Couldn't load conf file!");
-    conf::validate_conf_group(&conf, "general", &["port"]);
-    conf::validate_conf_group(&conf, "braid", &["name", "api_url", "app_id", "token", "site_url"]);
-    conf::validate_conf_group(&conf, "github", &["webhook_secret"]);
-    // TODO: validate repos conf
-    let bind_port = conf::get_conf_val_n(&conf, "general", "port").unwrap();
-    let bind_addr = format!("localhost:{}", bind_port);
-    let braid_conf = conf::get_conf_group(&conf, "braid").unwrap();
+    let conf = app_conf::load_conf(&conf_filename[..]);
     tracking::setup_tables();
     // Start server
-    println!("Bot {:?} starting", braid_conf.get("name").unwrap().as_str().unwrap());
+    let bind_addr = format!("localhost:{}", conf.general.port);
+    println!("Bot {:?} starting", conf.braid.name);
     Iron::new(move |request : &mut Request| {
         let req_path = request.url.path().join("/");
         match request.method {
