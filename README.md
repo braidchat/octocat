@@ -25,6 +25,9 @@ site_url = "https://braid.chat"
 app_id = "app id from braid"
 token = "app token from braid"
 
+[github]
+webhook_secret = "random secret you put in the github webhook conf"
+
 [[repos]]
 token = "token created from github"
 org = "jamesnvc"
